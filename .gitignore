@@ -1,0 +1,12 @@
+# raw captures — may contain real IPs / payloads, review before committing
+evidence/raw/
+*.pcap
+*.log
+
+# local notes not meant for the public repo
+NOTES.local.md
+scratch/
+
+# os / editor cruft
+.DS_Store
+*.swp
