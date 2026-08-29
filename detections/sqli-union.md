@@ -17,7 +17,7 @@ confirmation probe to a full dump of the credential store.
 | Configuration | DVWA security level: low |
 | Attacker | Kali VM (192.168.122.0/24) |
 | Payload | `' UNION SELECT user, password FROM users-- -` |
-| Time run | _fill in: the timestamp you ran the UNION_ |
+| Time run | 2026-08-29 ~08:30 (approx) |
 
 ### Steps
 
