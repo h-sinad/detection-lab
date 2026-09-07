@@ -17,7 +17,7 @@ confirmation probe to a full dump of the credential store.
 | Configuration | DVWA security level: low |
 | Attacker | Kali VM (192.168.122.0/24) |
 | Payload | `' UNION SELECT user, password FROM users-- -` |
-| Time run | 2026-08-29 ~08:30 (approx) |
+| Time run | 2026-09-07 13:41:30 (approx) |
 
 ### Steps
 
@@ -71,19 +71,61 @@ The request as seen on the wire (URL-encoded GET parameter):
 GET /vulnerabilities/sqli/?id=' UNION SELECT user, password FROM users-- -&Submit=Submit
 ```
 
-_TODO Phase 3: replace with the actual web server / Wazuh log line once the
-agent is collecting, and record the exact timestamp for correlation._
+The Wazuh manager detected this via its built-in web ruleset. Raw alert from
+`/var/ossec/logs/alerts/alerts.log`:
+
+```
+** Alert 1788788490.0: - web,accesslog,attack,sql_injection,pci_dss_6.5,...
+2026 Sep 07 13:41:30 (danish) any->/home/danish/lab/dvwa/logs/access.log
+Rule: 31103 (level 7) -> 'SQL injection attempt.'
+Src IP: 172.18.0.1
+172.18.0.1 - - [07/Sep/2026:13:41:29 +0000] "GET /vulnerabilities/sqli/?id=1' UNION SELECT 1,2-- -&Submit=Submit HTTP/1.1" 302 429
+```
 
 ## The rule
 
-_TODO — Phase 3. Detection will key on SQL keywords appearing in HTTP request
-parameters (e.g. `UNION SELECT`, `OR '1'='1`, `-- ` comment sequences) in the
-web server access logs. Rule to be written and mapped once Wazuh is ingesting
-DVWA's logs._
+Currently caught by Wazuh's built-in rule 31103 (level 7, generic SQL
+injection). This is a default rule, not custom-authored. A higher-severity
+custom rule for confirmed UNION-based data extraction is authored below.
+
+### Custom rule (authored)
+
+Wazuh's default rule 31103 catches SQLi generically at level 7. This custom
+rule chains off it to escalate confirmed UNION-based data extraction to
+level 12 (high), so an analyst triages active exfiltration ahead of mere probes.
+
+`/var/ossec/etc/rules/local_rules.xml`:
+
+```xml
+<group name="web,attack,sql_injection,">
+  <rule id="100200" level="12">
+    <if_sid>31103</if_sid>
+    <url>UNION SELECT|union select|UNION+SELECT|union+select</url>
+    <description>SQLi: confirmed UNION-based data extraction attempt</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>sql_injection,data_exfiltration,</group>
+  </rule>
+</group>
+```
+
+Design decisions: chained via `if_sid` to build on the validated SQLi
+detection rather than re-detect from scratch; level 12 because `UNION SELECT`
+indicates confirmed extraction, not reconnaissance; ID in the 100000+ custom
+range; mapped to MITRE T1190.
 
 ## Alert
 
-_TODO — Phase 3. Screenshot of the Wazuh alert firing, saved to `evidence/`._
+Rule 100200 firing on a live UNION-based attack:
+
+```
+** Alert 1788791402.755: web,attack,sql_injection,data_exfiltration,
+2026 Sep 07 14:30:02 (danish) any->/home/danish/lab/dvwa/logs/access.log
+Rule: 100200 (level 12) -> 'SQLi: confirmed UNION-based data extraction attempt'
+Src IP: 172.18.0.1
+172.18.0.1 - - "GET /vulnerabilities/sqli/?id=1'+UNION+SELECT+1,2-- - ..." 302
+```
 
 ## False positives
 
