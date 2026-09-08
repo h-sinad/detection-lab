@@ -21,7 +21,7 @@ command execution on the host — the starting point for full server compromise.
 | Target | `http://192.168.122.1:8080/vulnerabilities/exec/` |
 | Configuration | DVWA security level: low |
 | Attacker | Kali VM (192.168.122.0/24) |
-| Time run | _fill in: timestamp_ |
+| Time run | 2026-09-08 01:31:52 (approx)|
 
 ### Steps
 
@@ -69,39 +69,83 @@ Content-Type: application/x-www-form-urlencoded
 ip=127.0.0.1; whoami&Submit=Submit
 ```
 
-_TODO Phase 3: replace with actual Wazuh/web server log lines once the agent is
-collecting, and record the exact timestamp for correlation._
+_Note: the request line above shows the payload (`ip=127.0.0.1; whoami`) as it
+was *sent*, but Apache's default access log does NOT record POST bodies. The
+actual logged line is only `POST /vulnerabilities/exec/` — the payload is
+absent. This shapes the detection (see False positives).
 
 ## The rule
 
-_TODO — Phase 3. Detection will key on shell metacharacters and common command
-names appearing in HTTP request parameters (e.g. `;`, `&&`, `|`, backticks,
-`$(`, followed by tokens like `whoami`, `cat`, `id`, `ls`, `uname`). Rule to be
-written and mapped once Wazuh is ingesting DVWA's logs._
+### Custom rule (authored)
+
+Wazuh's default rule 31108 ("Ignored URLs") matches these requests at level 0 —
+i.e. it actively *silences* them. So command injection to this endpoint produced
+no alert at all by default: a detection gap. This custom rule chains off 31108
+to override that suppression and raise an alert.
+
+`/var/ossec/etc/rules/local_rules.xml`:
+
+```xml
+<group name="web,attack,command-injection,">
+  <rule id="100400" level="8">
+    <if_sid>31108</if_sid>
+    <url>/vulnerabilities/exec/</url>
+    <protocol>POST</protocol>
+    <description>Possible command injection, POST to command-exec endpoint</description>
+    <mitre>
+      <id>T1059</id>
+    </mitre>
+    <group>command-injection,web-attack</group>
+  </rule>
+</group>
+```
+
+Design decisions: chained off 31108 to override a default that was silencing
+these requests; level 8 (not 12) because the payload is NOT visible in the log
+(see limitation below) — this is suspicion, not confirmation, and severity
+reflects that; mapped to MITRE T1059.
 
 ## Alert
 
-_TODO — Phase 3. Screenshot of the Wazuh alert firing, saved to `evidence/`._
+Rule 100400 firing live on a command injection attempt:
+
+```
+** Alert 1788831112.1543: - web,attack,command-injection,command-injection,web-attack
+2026 Sep 08 01:31:52 (danish) any->/home/danish/lab/dvwa/logs/access.log
+Rule: 100400 (level 8) -> 'Possible command injection, POST to command-exec endpoint'
+Src IP: 172.18.0.1
+172.18.0.1 - - [08/Sep/2026:01:31:51 +0000] "POST /vulnerabilities/exec/ HTTP/1.1" 302 429 "-" "curl/8.21.0"
+```
 
 ## False positives
 
-_TODO — Phase 3. Consider: parameters that legitimately contain semicolons or
-ampersands (URL-encoded data, query strings with multiple values, some search
-inputs). Shell metacharacters appear in benign traffic, so keyword-only matching
-is noisy — note how the rule is tuned to require a metacharacter *plus* a command
-token, or to scope to specific endpoints._
+This rule fires on ANY POST to /vulnerabilities/exec/, including legitimate use.
+Verified directly: a benign ping (`ip=127.0.0.1`, no injection) triggers the
+same alert as an actual attack (`ip=127.0.0.1;whoami`).
+
+Root cause: Apache's default access log does NOT record POST request bodies, so
+the injected command (`;whoami`) never reaches the log Wazuh reads. The rule can
+only match on method + endpoint, which are identical for attack and normal use.
+
+This is a fundamental limitation: **detection quality is capped by log quality.**
+You cannot detect on data that was never logged.
+
+Proper fix (not yet implemented): reconfigure Apache to log POST bodies (custom
+LogFormat), or add a WAF / mod_security in front, so the payload becomes visible.
+The rule could then match `;`, `&&`, `whoami`, `cat`, etc. and distinguish attack
+from legitimate ping — allowing a higher, confident severity.
 
 ## What this misses
 
-- **Encoding and obfuscation** — payloads using URL/hex encoding, whitespace
-  alternatives (`${IFS}` in place of spaces), or variable expansion can evade
-  literal metacharacter matching.
-- **Blind command injection** — where the command runs but produces no output in
-  the response (e.g. exfiltration via DNS, or time-based `sleep`), leaving no
-  obvious content signal in the response.
-- The log records the **attempt**. Confirming the command actually executed, and
-  what it did, requires host-level telemetry (process creation on the server),
-  not just web request logs — a strong argument for the Sysmon/endpoint work in
-  Phase 4.
-- Metacharacters split across parameters or delivered via less common vectors
-  (headers, cookies) if only the primary parameter is inspected.
+Because the rule matches only endpoint + method (not payload), it misses nothing
+*additional* about the attack — but it also cannot distinguish attacks from
+legitimate use (see False positives). Beyond that:
+
+- It only covers this one endpoint (/vulnerabilities/exec/). Command injection
+  on any other endpoint would need its own rule.
+- Payload-based evasion is moot here — nothing about the payload is inspected,
+  so encoding tricks, alternative separators (&&, |, backticks), and specific
+  commands are all invisible either way.
+- Confirming a command actually *executed* (vs. was merely attempted) needs
+  host-level process telemetry on the server — e.g. Sysmon/auditd watching for
+  processes spawned by the web server user. This is the Phase 4 argument.
