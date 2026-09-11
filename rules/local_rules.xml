@@ -42,3 +42,15 @@
     <group>command-injection,web-attack</group>
   </rule>
 </group>
+
+<group name="web,attack,xss,">
+  <rule id="100500" level="10">
+    <if_sid>31105</if_sid>
+    <url>script|%3Cscript|onerror=|onload=|javascript:</url>
+    <description>Reflected XSS: script injection attempt in URL parameter</description>
+    <mitre>
+      <id>T1059.007</id>
+    </mitre>
+    <group>xss,reflected_xss,web_attack,</group>
+  </rule>
+</group>

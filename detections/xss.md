@@ -80,33 +80,52 @@ collecting, and record exact timestamps for correlation._
 
 ## The rule
 
-_TODO — Phase 3. Detection will key on script-related markup appearing in HTTP
-request parameters and bodies (e.g. `<script`, `onerror=`, `onload=`,
-`javascript:`, common event handlers). Rule to be written and mapped once Wazuh
-is ingesting DVWA's logs._
+### Custom rule (authored)
+
+Wazuh's default rule 31105 flags generic "XSS attempt" at level 6. This custom
+rule chains off it and escalates to level 10 when a concrete script-injection
+signature is present in the URL.
+
+```xml
+<group name="web,attack,xss,">
+  <rule id="100500" level="10">
+    <if_sid>31105</if_sid>
+    <url>script|%3Cscript|onerror=|onload=|javascript:</url>
+    <description>Reflected XSS: script injection attempt in URL parameter</description>
+    <mitre>
+      <id>T1059.007</id>
+    </mitre>
+    <group>xss,reflected_xss,web_attack,</group>
+  </rule>
+</group>
+```
+
+Design: chained off 31105 to escalate rather than duplicate; matches the
+technique (script tags + common event-handler vectors) not a specific payload;
+includes the URL-encoded form (%3Cscript) so a browser-encoded attack still
+matches. Level 10 = confirmed signature vs. the default's heuristic level 6.
+Mapped to MITRE T1059.007.
 
 ## Alert
 
-_TODO — Phase 3. Screenshot of the Wazuh alert firing, saved to `evidence/`._
+```
+Rule: 100500 (level 10) -> 'Reflected XSS: script injection attempt in URL parameter'
+```
 
 ## False positives
 
-_TODO — Phase 3. Consider: forums, comment systems, or CMS admin fields where
-users legitimately submit HTML or code snippets; security tooling and WAF logs
-that themselves contain payload strings. Note how the rule is tuned._
+Matching the bare word `script` is deliberately broad to catch raw `<script>`
+without putting XML-breaking `<` characters in the rule. Trade-off: a benign URL
+containing "script" as a substring (e.g. /scripts/app.js, ?ref=description) could
+false-positive. A tighter rule would match `%3Cscript` or `script>` specifically,
+trading coverage for precision. Verify against real traffic before production use.
 
 ## What this misses
 
-- **Stored XSS is a two-part problem.** The malicious *request* (the POST that
-  plants the payload) happens once and is detectable. But the payload then fires
-  on later page loads whose requests contain **no attack content at all** —
-  those loads look completely normal in the logs. A request-inspection rule sees
-  the planting, not the ongoing execution. This gap is worth documenting
-  explicitly.
-- **Encoding and obfuscation** — payloads using HTML entities, URL encoding,
-  `String.fromCharCode`, or event-handler vectors without the literal `<script>`
-  string can evade naive keyword matching.
-- **DOM-based XSS** — where the injection never reaches the server (handled
-  entirely client-side in JavaScript) produces no server-side log at all.
-- The log shows the **attempt**, not whether the script actually executed in any
-  victim's browser.
+- Stored XSS: the payload is submitted via POST body, which Apache's default log
+  does not record (same limitation as command injection) — this rule only covers
+  reflected XSS where the payload rides in the URL.
+- DOM-based XSS: handled entirely client-side, never reaches the server log.
+- Heavy obfuscation: mixed-case tags, char-code encoding, or novel event handlers
+  beyond the listed set would evade the signature.
+- The log shows the attempt, not whether the script executed in a victim's browser.
