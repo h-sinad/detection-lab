@@ -54,7 +54,10 @@ tuning notes.
 
 | Detection | Technique | Rule | Status |
 |-----------|-----------|------|--------|
-| _None yet — first rules land in Phase 3._ | | | |
+| [SQL Injection (UNION)](detections/sqli-union.md) | T1190 | 100200 | Validated |
+| [Command Injection](detections/command-injection.md) | T1059 | 100400 | Validated |
+| [Cross-Site Scripting](detections/xss.md) | T1059.007 | 100500 | Validated |
+| [Login Brute Force](detections/brute-force.md) | T1110 | 100600/601 | Validated |
 
 ## Repository layout
 
