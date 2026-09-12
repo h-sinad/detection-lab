@@ -54,3 +54,24 @@
     <group>xss,reflected_xss,web_attack,</group>
   </rule>
 </group>
+
+<group name="web,attack,brute_force,">
+
+  <rule id="100600" level="3">
+    <if_sid>31100</if_sid>
+    <url>/vulnerabilities/brute/</url>
+    <description>Login attempt on brute-force endpoint</description>
+    <group>authentication_attempt,</group>
+  </rule>
+
+  <rule id="100601" level="10" frequency="6" timeframe="30">
+    <if_matched_sid>100600</if_matched_sid>
+    <same_source_ip />
+    <description>Brute force attack: multiple login attempts from same source</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>brute_force,authentication_failures,</group>
+  </rule>
+
+</group>
