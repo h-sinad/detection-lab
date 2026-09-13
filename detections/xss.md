@@ -1,7 +1,7 @@
 # Detection — Cross-Site Scripting (Reflected & Stored)
 
 **Technique:** T1059.007 — Command and Scripting Interpreter: JavaScript
-**Rule:** _TODO — Phase 3 (Wazuh)_
+**Rule:** 100500 (`rules/local_rules.xml`)
 **Status:** Draft — attack captured, detection pending SIEM
 
 ## Attack
@@ -74,9 +74,6 @@ Content-Type: application/x-www-form-urlencoded
 
 txtName=test&mtxMessage=<script>alert('stored')</script>&btnSign=Sign+Guestbook
 ```
-
-_TODO Phase 3: replace with actual Wazuh/web server log lines once the agent is
-collecting, and record exact timestamps for correlation._
 
 ## The rule
 

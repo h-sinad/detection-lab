@@ -1,7 +1,7 @@
 # Detection — SQL Injection (UNION-based)
 
 **Technique:** T1190 — Exploit Public-Facing Application
-**Rule:** _TODO — Phase 3 (Wazuh)_
+**Rule:** 100200 (`rules/local_rules.xml`)
 **Status:** Draft — attack captured, detection pending SIEM
 
 ## Attack
@@ -129,9 +129,13 @@ Src IP: 172.18.0.1
 
 ## False positives
 
-_TODO — Phase 3. Consider: legitimate search queries containing the word
-"union" or "select"; application parameters that legitimately contain SQL-like
-strings. Note how the rule is tuned to reduce these._
+Low false-positive risk. The rule matches `UNION SELECT` (and encoded variants),
+a string that does not appear in normal web traffic — legitimate requests rarely
+if ever contain SQL keywords in this combination. The main theoretical false
+positive would be an application that legitimately passes SQL-like strings in a
+parameter (e.g. a query builder or a search box searching documentation about
+SQL), which is uncommon and easily excluded by scoping the rule to specific
+endpoints if needed.
 
 ## What this misses
 

@@ -1,7 +1,7 @@
 # Detection — Command Injection
 
 **Technique:** T1059 — Command and Scripting Interpreter
-**Rule:** _TODO — Phase 3 (Wazuh)_
+**Rule:** 100400 (`rules/local_rules.xml`)
 **Status:** Draft — attack captured, detection pending SIEM
 
 ## Attack

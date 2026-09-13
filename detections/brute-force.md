@@ -1,7 +1,7 @@
 # Detection — Login Brute Force
 
 **Technique:** T1110 — Brute Force
-**Rule:** _TODO — Phase 3 (Wazuh)_
+**Rule:** 100600 / 100601 (`rules/local_rules.xml`)
 **Status:** Draft — attack captured, detection pending SIEM
 
 ## Attack
@@ -54,8 +54,6 @@ GET /vulnerabilities/brute/?username=admin&password=password&Login=Login  (succe
 
 All from `192.168.122.23`, within the same second.
 
-_TODO Phase 3: replace with actual Wazuh/web server + auth log lines once the
-agent is collecting, and record exact timestamps._
 
 ## The rule
 

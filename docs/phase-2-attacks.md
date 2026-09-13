@@ -61,7 +61,7 @@ understanding than a working Hydra invocation would have been.
 
 ## Notes for Phase 3
 
-Each detection file has its **detection half deliberately left as TODO** — the
+Each detection file has its detection half completed in Phase 3. — the
 rule, the alert screenshot, false-positive tuning, and the real log lines. Those
 cannot be completed until Wazuh is ingesting DVWA's logs. Phase 3 fills them in:
 
