@@ -1,73 +1,72 @@
 # detection-lab
 
-A self-hosted detection engineering lab built on a single laptop. Attacks are
-run against deliberately vulnerable targets, the resulting telemetry is
-collected in a SIEM, and detection rules are written by hand to catch each
-technique — then tuned to remove false positives.
+A self-hosted **detection engineering lab** built on a single laptop. Deliberately
+vulnerable web applications are attacked from an isolated attacker VM, the
+resulting traffic is collected in a SIEM, and **custom detection rules — authored
+from scratch — turn those attacks into alerts**, each mapped to MITRE ATT&CK and
+documented with its false positives and blind spots.
 
-The objective is not to demonstrate exploitation. It is to demonstrate the full
-loop from adversary action to alert: running a technique, finding its trace in
-the logs, authoring a detection rule, mapping it to MITRE ATT&CK, and honestly
-recording what could not be detected.
+The goal was never to demonstrate exploitation (the targets are trivially
+vulnerable by design). It was to demonstrate the full detection loop: run a
+technique, find its trace in the logs, write the rule that catches it, tune out
+the noise, and honestly record what the rule cannot see.
+
+## What this shows
+
+- **Four custom Wazuh detection rules**, authored by hand — not default rules.
+- Coverage of **both detection paradigms**: content matching and frequency
+  correlation.
+- Each rule **mapped to MITRE ATT&CK** and documented with design reasoning,
+  false positives, and limitations.
+- A working, reproducible **SIEM pipeline** from attack to alert on constrained
+  hardware.
+
+## Detections
+
+| Detection | Technique | Rule | Approach | Status |
+|-----------|-----------|------|----------|--------|
+| [SQL Injection (UNION)](detections/sqli-union.md) | T1190 | 100200 | Escalate default on confirmed data extraction | Validated |
+| [Command Injection](detections/command-injection.md) | T1059 | 100400 | Fill a gap the default ruleset silenced | Validated |
+| [Cross-Site Scripting](detections/xss.md) | T1059.007 | 100500 | Escalate default on concrete signature | Validated |
+| [Login Brute Force](detections/brute-force.md) | T1110 | 100600 / 100601 | Frequency correlation (6 attempts / 30s / same IP) | Validated |
+
+Rule definitions: [`rules/local_rules.xml`](rules/local_rules.xml).
 
 ## Architecture
 
 ```mermaid
-graph TB
-    subgraph host["Arch Linux host — 16 GB"]
-        kali["Kali VM — attacker<br/>192.168.122.0/24"]
-        dvwa["DVWA — Docker<br/>web target"]
-        win["Windows VM<br/>Sysmon + Atomic Red Team"]
-        cowrie["Cowrie<br/>SSH honeypot"]
-        wazuh["Wazuh — SIEM"]
-        rules["Detection rules<br/>(the deliverable)"]
-    end
-
-    kali -->|attacks| dvwa
-    dvwa -->|logs| wazuh
-    win -->|logs| wazuh
-    cowrie -->|logs| wazuh
-    wazuh -->|alerts| rules
+graph LR
+    kali["Attacker<br/>Kali VM / custom tools"] -->|attacks| dvwa["DVWA<br/>Docker target"]
+    dvwa -->|access log| agent["Wazuh agent<br/>on host"]
+    agent -->|events| mgr["Wazuh manager<br/>rules engine"]
+    mgr -->|alerts| idx["Indexer"]
+    idx --> dash["Dashboard + MITRE view"]
+    mgr -.->|custom rules| rules["local_rules.xml"]
 ```
 
-The lab runs in scenarios rather than all at once — 16 GB of RAM does not permit
-every component to run simultaneously. See the phase documents for the RAM
-budget behind each scenario.
+All components run on one 16 GB laptop under KVM/QEMU and Docker. The lab runs in
+scenarios rather than all at once, by design — see the phase docs for the RAM
+budget behind each.
 
 ## Phases
 
 | Phase | Focus | Status |
 |-------|-------|--------|
 | [0 — Hypervisor foundation](docs/phase-0-hypervisor.md) | KVM/QEMU, libvirt, storage pool, NAT network, first VM | Complete |
-| [1 — Targets](docs/phase-1-targets.md) | Docker on host, DVWA, lab network reachability | Complete |
-| [2 — Attack & telemetry](docs/phase-2-attacks.md) | Run web attacks, record payloads and timestamps | In progress |
-| [3 — Wazuh SIEM](docs/phase-3-wazuh.md) | Deploy SIEM, enroll agents, map coverage gaps | Planned |
-| [4 — Endpoint detection](docs/phase-4-windows.md) | Windows, Sysmon, Atomic Red Team, rule authoring | Planned |
-| [5 — Honeypot](docs/phase-5-cowrie.md) | Cowrie, custom Wazuh decoder and ruleset | Planned |
-| [6 — Documentation](docs/phase-6-docs.md) | Rebuild guide, diagrams, limitations writeup | Ongoing |
-
-## Detections
-
-Each detection is documented as a self-contained case: the attack that triggers
-it, the raw log evidence, the rule, the ATT&CK mapping, and false-positive
-tuning notes.
-
-| Detection | Technique | Rule | Status |
-|-----------|-----------|------|--------|
-| _None yet — first rules land in Phase 3._ | | | |
+| [1 — Targets](docs/phase-1-targets.md) | Docker on host, DVWA, isolated lab network | Complete |
+| [2 — Attack & telemetry](docs/phase-2-attacks.md) | Four web attacks, payloads and timing recorded | Complete |
+| [3 — Wazuh SIEM & detection](docs/phase-3-wazuh.md) | SIEM deployed, four custom rules authored and validated | Complete |
 
 ## Repository layout
 
 ```
 detection-lab/
-├── README.md                  This file.
-├── docs/                      Per-phase build logs (the journey).
-│   ├── phase-0-hypervisor.md
-│   └── _phase-template.md     Copy this to start a new phase.
-├── detections/                Per-rule case files (the product).
-│   └── _detection-template.md Copy this to document a new rule.
-├── rules/                     Wazuh XML rule definitions.
-└── evidence/                  Screenshots and raw log captures.
+├── README.md
+├── docs/            Per-phase build logs (the journey + rebuild steps).
+├── detections/      Per-rule case files: attack, evidence, rule, tuning, limits.
+├── rules/           The Wazuh XML rule definitions.
+├── tools/           Custom tooling (e.g. brute.py).
+└── evidence/        Screenshots (MITRE coverage dashboard, alerts).
 ```
 
 ## Environment
@@ -75,15 +74,29 @@ detection-lab/
 | | |
 |---|---|
 | Host | Lenovo IdeaPad Gaming 3 16IAH7 |
-| OS | Arch Linux (`linux-zen`, `nvidia-open-dkms`) |
-| RAM | 16 GB DDR4-3200 |
+| OS | Arch Linux (`linux-zen`), Hyprland |
+| RAM | 16 GB |
 | Hypervisor | KVM/QEMU via libvirt |
-| VM storage | Dedicated 301 GB partition at `/mnt/vms` |
+| SIEM | Wazuh 4.14 (single-node, Docker) |
+| Target | DVWA (Docker) |
 
-## A note on scope
+## Scope and future work
 
-This lab was built on constrained hardware by design. Some techniques generate
-no usable telemetry in this environment, and some detections cannot be reliably
-separated from normal activity. Those cases are documented rather than omitted —
-see the limitations section in [Phase 6](docs/phase-6-docs.md). Knowing what a
-detection cannot see is part of the discipline.
+This lab is deliberately scoped to **web-application attack detection** — a
+complete, self-contained slice of detection engineering. Two extensions are
+planned as future work, gated on hardware:
+
+- **Endpoint detection (Windows + Sysmon + Atomic Red Team)** — process-level
+  telemetry and rules for host-based techniques. This is where most enterprise
+  SOC detection lives; deferred pending a RAM upgrade (Windows + SIEM together
+  exceeds a comfortable footprint on 16 GB).
+- **Cowrie honeypot** — a custom Wazuh decoder and ruleset for real attacker
+  traffic, run on always-on hardware.
+
+## A note on limitations
+
+Detection quality is capped by log quality, and every rule is a trade-off between
+coverage and false positives. Where a rule cannot cleanly separate an attack from
+legitimate activity — or cannot see the attack at all — that is documented rather
+than hidden. See the per-detection "What this misses" sections, and the
+consolidated [limitations writeup](docs/limitations.md).
